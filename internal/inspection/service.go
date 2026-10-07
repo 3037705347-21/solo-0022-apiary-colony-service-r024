@@ -27,6 +27,7 @@ type RecordInput struct {
 	Temper         string
 	MiteCount      int
 	Note           string
+	RequestID      string
 }
 
 func (s *Service) Record(hiveID string, input RecordInput) (domain.Inspection, error) {
@@ -47,7 +48,7 @@ func (s *Service) Record(hiveID string, input RecordInput) (domain.Inspection, e
 		return domain.Inspection{}, err
 	}
 	record.Concerns = DeriveConcerns(record)
-	saved, err := s.store.AddInspection(hiveID, record)
+	saved, err := s.store.AddInspection(hiveID, record, s.clock(), input.RequestID)
 	if err != nil {
 		return domain.Inspection{}, err
 	}

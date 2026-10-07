@@ -25,8 +25,9 @@ func (s *Server) handleReplaceQueen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	input := queen.ReplaceInput{
-		Origin: request.Origin,
-		Reason: request.Reason,
+		Origin:    request.Origin,
+		Reason:    request.Reason,
+		RequestID: requestIDFrom(r),
 	}
 	if introducedAt != nil {
 		input.IntroducedAt = *introducedAt

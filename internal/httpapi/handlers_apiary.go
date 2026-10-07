@@ -20,10 +20,11 @@ func (s *Server) handleRegisterApiary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	created, err := s.deps.Apiary.RegisterApiary(apiary.RegisterApiaryInput{
-		ID:       request.ID,
-		Name:     request.Name,
-		District: request.District,
-		Keeper:   request.Keeper,
+		ID:        request.ID,
+		Name:      request.Name,
+		District:  request.District,
+		Keeper:    request.Keeper,
+		RequestID: requestIDFrom(r),
 	})
 	if err != nil {
 		writeError(w, err)

@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"example.com/apiary-colony-service/internal/apiary"
+	"example.com/apiary-colony-service/internal/audit"
 	"example.com/apiary-colony-service/internal/inspection"
 	"example.com/apiary-colony-service/internal/queen"
 	"example.com/apiary-colony-service/internal/status"
@@ -14,6 +15,7 @@ type Deps struct {
 	Inspection *inspection.Service
 	Queen      *queen.Service
 	Status     *status.Service
+	Audit      *audit.Service
 }
 
 // Server 暴露蜂场协作服务，并把领域错误映射为稳定响应。
@@ -29,5 +31,5 @@ func New(deps Deps) *Server {
 }
 
 func (s *Server) Handler() http.Handler {
-	return s.mux
+	return withRequestID(s.mux)
 }

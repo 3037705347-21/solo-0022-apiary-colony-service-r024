@@ -22,8 +22,9 @@ func (s *Server) handleInstallHive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	created, err := s.deps.Apiary.InstallHive(r.PathValue("apiaryId"), apiary.InstallHiveInput{
-		ID:    request.ID,
-		Model: request.Model,
+		ID:        request.ID,
+		Model:     request.Model,
+		RequestID: requestIDFrom(r),
 	})
 	if err != nil {
 		writeError(w, err)
@@ -47,7 +48,8 @@ func (s *Server) handleAdvanceHiveState(w http.ResponseWriter, r *http.Request) 
 		writeError(w, err)
 		return
 	}
-	transition, err := s.deps.Apiary.AdvanceHiveState(r.PathValue("hiveId"), request.Target)
+	transition, err := s.deps.Apiary.AdvanceHiveState(
+		r.PathValue("hiveId"), request.Target, requestIDFrom(r))
 	if err != nil {
 		writeError(w, err)
 		return

@@ -19,6 +19,7 @@ var workflows = map[string]func(*client) error{
 	"replace-queen":      checkReplaceQueen,
 	"advance-hive-state": checkAdvanceHiveState,
 	"read-apiary-status": checkReadApiaryStatus,
+	"read-audit-events":  checkReadAuditEvents,
 }
 
 func main() {

@@ -33,6 +33,7 @@ func (s *Server) handleRecordInspection(w http.ResponseWriter, r *http.Request) 
 		Temper:         request.Temper,
 		MiteCount:      request.MiteCount,
 		Note:           request.Note,
+		RequestID:      requestIDFrom(r),
 	}
 	if observedAt != nil {
 		input.ObservedAt = *observedAt

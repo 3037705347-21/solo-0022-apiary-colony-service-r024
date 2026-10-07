@@ -11,6 +11,7 @@
     {"id": "inspection", "path": "internal/inspection", "responsibility": "巡检接收与关注项判定"},
     {"id": "queen", "path": "internal/queen", "responsibility": "蜂王更换与标记色推导"},
     {"id": "status", "path": "internal/status", "responsibility": "蜂场状态汇总聚合"},
+    {"id": "audit", "path": "internal/audit", "responsibility": "按蜂场与蜂箱读取不可变审计事件"},
     {"id": "app", "path": "internal/app", "responsibility": "应用组装与配置"},
     {"id": "check", "path": "cmd/check", "responsibility": "按 workflow 执行真实 HTTP 路径的校验入口"}
   ],
@@ -77,6 +78,16 @@
       "failure": "未知蜂场返回未找到，asOf 非法返回校验错误",
       "verification": "校验入口构造多蜂箱场景并断言计数、待巡检与排序稳定",
       "module_ids": ["httpapi", "status", "store"]
+    },
+    {
+      "id": "read-audit-events",
+      "name": "读取审计事件",
+      "entry": "GET /apiaries/{apiaryId}/events 与 GET /hives/{hiveId}/events",
+      "steps": ["写操作在同一把锁内追加不可变事件", "按蜂场或蜂箱过滤事件", "按全局序号升序返回深拷贝"],
+      "success": "返回 200 与按序号升序、携带请求编号的审计事件",
+      "failure": "未知蜂场或蜂箱返回未找到；被拒绝的写入不产生事件",
+      "verification": "校验入口覆盖五类写入与多类失败请求，断言事件同源、失败不留事件、重复读取内容一致",
+      "module_ids": ["httpapi", "audit", "domain", "store"]
     }
   ]
 }

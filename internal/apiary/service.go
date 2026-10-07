@@ -21,15 +21,17 @@ func New(memory *store.Memory, clock func() time.Time) *Service {
 }
 
 type RegisterApiaryInput struct {
-	ID       string
-	Name     string
-	District string
-	Keeper   string
+	ID        string
+	Name      string
+	District  string
+	Keeper    string
+	RequestID string
 }
 
 type InstallHiveInput struct {
-	ID    string
-	Model string
+	ID        string
+	Model     string
+	RequestID string
 }
 
 func (s *Service) RegisterApiary(input RegisterApiaryInput) (domain.Apiary, error) {
@@ -37,7 +39,7 @@ func (s *Service) RegisterApiary(input RegisterApiaryInput) (domain.Apiary, erro
 	if err != nil {
 		return domain.Apiary{}, err
 	}
-	if err := s.store.CreateApiary(apiary); err != nil {
+	if err := s.store.CreateApiary(apiary, input.RequestID); err != nil {
 		return domain.Apiary{}, err
 	}
 	return apiary, nil
@@ -63,7 +65,7 @@ func (s *Service) InstallHive(apiaryID string, input InstallHiveInput) (domain.H
 	if err != nil {
 		return domain.Hive{}, err
 	}
-	if err := s.store.CreateHive(hive); err != nil {
+	if err := s.store.CreateHive(hive, input.RequestID); err != nil {
 		return domain.Hive{}, err
 	}
 	return hive, nil
@@ -77,10 +79,10 @@ func (s *Service) Hive(id string) (domain.Hive, error) {
 	return hive, nil
 }
 
-func (s *Service) AdvanceHiveState(hiveID, target string) (domain.Transition, error) {
+func (s *Service) AdvanceHiveState(hiveID, target, requestID string) (domain.Transition, error) {
 	to, err := ParseHiveState(target)
 	if err != nil {
 		return domain.Transition{}, err
 	}
-	return s.store.AdvanceHive(hiveID, to, s.clock())
+	return s.store.AdvanceHive(hiveID, to, s.clock(), requestID)
 }

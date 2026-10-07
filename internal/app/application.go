@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"example.com/apiary-colony-service/internal/apiary"
+	"example.com/apiary-colony-service/internal/audit"
 	"example.com/apiary-colony-service/internal/httpapi"
 	"example.com/apiary-colony-service/internal/inspection"
 	"example.com/apiary-colony-service/internal/queen"
@@ -30,6 +31,7 @@ func NewWithClock(config Config, clock func() time.Time) *Application {
 		Inspection: inspection.New(memory, clock),
 		Queen:      queen.New(memory, clock),
 		Status:     status.New(memory, clock),
+		Audit:      audit.New(memory),
 	})
 	return &Application{Config: config, Store: memory, Server: server}
 }

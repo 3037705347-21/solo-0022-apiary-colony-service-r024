@@ -30,11 +30,11 @@ type ReplaceInput struct {
 	Origin       string
 	IntroducedAt time.Time
 	Reason       string
+	RequestID    string
 }
 
 func (s *Service) Replace(hiveID string, input ReplaceInput) (domain.Queen, error) {
-	hive, ok := s.store.GetHive(hiveID)
-	if !ok {
+	if _, ok := s.store.GetHive(hiveID); !ok {
 		return domain.Queen{}, domain.NotFound("蜂箱", hiveID)
 	}
 	origin, err := ParseOrigin(input.Origin)
@@ -57,7 +57,7 @@ func (s *Service) Replace(hiveID string, input ReplaceInput) (domain.Queen, erro
 	if reason == ReasonLoss {
 		closeState = domain.QueenLost
 	}
-	return s.store.AddQueen(hiveID, record, hive.ActiveQueenID, closeState, s.clock())
+	return s.store.AddQueen(hiveID, record, closeState, reason, s.clock(), input.RequestID)
 }
 
 func (s *Service) List(hiveID string) ([]domain.Queen, error) {

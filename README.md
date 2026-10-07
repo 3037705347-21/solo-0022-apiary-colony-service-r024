@@ -13,7 +13,8 @@
 - `internal/inspection`：巡检接收与关注项判定。
 - `internal/queen`：蜂王更换与标记色推导。
 - `internal/status`：蜂场状态汇总聚合。
-- `internal/httpapi`：路由、请求解析与响应映射。
+- `internal/audit`：按蜂场与蜂箱读取不可变审计事件。
+- `internal/httpapi`：路由、请求解析、请求编号与响应映射。
 - `internal/app`：应用组装与配置。
 
 ## 构建与运行
@@ -54,6 +55,19 @@ go run ./cmd/check -workflow read-apiary-status
 - `GET /hives/{hiveId}/queens`：列出蜂王记录。
 - `GET /apiaries/{apiaryId}/status`：可选查询参数 `asOf`（RFC3339），返回状态计数、
   待巡检蜂箱、有未处理关注项的蜂箱与逐蜂箱摘要。
+- `GET /apiaries/{apiaryId}/events`：返回该蜂场范围内的审计事件（含蜂场录入与下属蜂箱事件）。
+- `GET /hives/{hiveId}/events`：返回该蜂箱自身的审计事件（安装、状态推进、巡检、换王）。
+
+审计事件在写操作成功后可按蜂场或蜂箱读取，回答某个状态、蜂王或巡检是在什么时候、
+由哪次请求变成现在这样。每条事件包含全局序号 `seq`、稳定编号 `id`、`type`、
+`apiaryId`/`hiveId`、`requestId`、`occurredAt` 与 `detail`，事件类型包括
+`apiary_registered`、`hive_installed`、`hive_state_advanced`、
+`inspection_recorded`、`queen_replaced`。事件按 `seq` 升序返回。
+
+写请求可携带 `X-Request-Id` 请求头（字母、数字、`-`、`_`，不超过 64 字符）作为请求编号，
+响应会通过同名响应头回传；未携带时服务生成 `req-` 开头的编号。失败或被拒绝的请求
+（校验错误、未找到、冲突、非法状态）不会留下任何审计事件，事件只追加、不可改写，
+重复读取同一范围得到稳定的顺序与内容。
 
 错误响应统一为：
 
@@ -89,6 +103,7 @@ go run ./cmd/check -workflow record-inspection
 go run ./cmd/check -workflow replace-queen
 go run ./cmd/check -workflow advance-hive-state
 go run ./cmd/check -workflow read-apiary-status
+go run ./cmd/check -workflow read-audit-events
 ```
 
 ## 测试边界
