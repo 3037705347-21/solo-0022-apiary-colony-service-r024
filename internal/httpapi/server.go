@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"example.com/apiary-colony-service/internal/apiary"
+	"example.com/apiary-colony-service/internal/audit"
 	"example.com/apiary-colony-service/internal/inspection"
 	"example.com/apiary-colony-service/internal/queen"
 	"example.com/apiary-colony-service/internal/status"
@@ -11,6 +12,7 @@ import (
 
 type Deps struct {
 	Apiary     *apiary.Service
+	Audit      *audit.Service
 	Inspection *inspection.Service
 	Queen      *queen.Service
 	Status     *status.Service

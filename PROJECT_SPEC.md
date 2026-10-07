@@ -17,6 +17,7 @@
 - 蜂箱（hive）：编号、所属蜂场、箱型、蜂群状态、立群时间、当前蜂王编号、最近巡检时间。
 - 巡检（inspection）：所属蜂箱、观察时间、群势、子脾形态、性情、螨计数、备注与派生的关注项。
 - 蜂王（queen）：编号、所属蜂箱、引入时间、来源、标记色、产卵状态。
+- 审计事件（event）：顺序号、类别、所属蜂场与蜂箱、发生时间与同源事实。
 
 ## 业务流程
 
@@ -54,6 +55,13 @@
 协调人向 `GET /apiaries/{apiaryId}/status` 查询该蜂场的状态汇总。服务在同一份快照上
 聚合蜂箱数量、各状态计数、待巡检蜂箱、有未处理关注项的蜂箱以及产卵蜂王计数，并按蜂箱
 编号稳定排序返回每个蜂箱的最新摘要。可选 `asOf` 参数使待巡检判定可复现。
+
+### 读取审计事件（audit-events）
+
+值守人与协调人向 `GET /apiaries/{apiaryId}/events` 或 `GET /hives/{hiveId}/events`
+读取审计事件。蜂场、蜂箱、巡检与换王的关键写入在被采纳时与业务结果同源落账一条事件；
+校验失败、编号冲突或状态冲突而未采纳的请求不留下事件。事件只追加不改写，按顺序号
+升序返回，同一范围的重复读取得到稳定的顺序与内容。
 
 ## 状态与规则
 
@@ -96,11 +104,12 @@
 ## 模块划分
 
 - `internal/domain`：实体、枚举、校验、领域错误与状态机迁移表。
-- `internal/store`：并发安全的内存仓储与一致性快照。
+- `internal/store`：并发安全的内存仓储、一致性快照与只增不改的审计事件日志。
 - `internal/apiary`：蜂场与蜂箱录入、蜂箱状态迁移。
 - `internal/inspection`：巡检接收与关注项判定。
 - `internal/queen`：蜂王更换与标记色推导。
 - `internal/status`：蜂场状态汇总聚合。
+- `internal/audit`：按蜂场或蜂箱读取审计事件。
 - `internal/httpapi`：HTTP 路由、请求解析与响应映射。
 - `internal/app`：应用组装与配置。
 - `cmd/server`：服务进程入口。
@@ -115,6 +124,7 @@
 - `POST /hives/{hiveId}/queens`：更换蜂王。
 - `POST /hives/{hiveId}/state`：推进蜂群状态。
 - `GET /apiaries/{apiaryId}/status`：读取蜂场状态汇总。
+- `GET /apiaries/{apiaryId}/events`、`GET /hives/{hiveId}/events`：按蜂场或蜂箱读取审计事件。
 
 ## 校验计划
 

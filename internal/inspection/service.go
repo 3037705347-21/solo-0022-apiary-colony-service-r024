@@ -47,7 +47,7 @@ func (s *Service) Record(hiveID string, input RecordInput) (domain.Inspection, e
 		return domain.Inspection{}, err
 	}
 	record.Concerns = DeriveConcerns(record)
-	saved, err := s.store.AddInspection(hiveID, record)
+	saved, err := s.store.AddInspection(hiveID, record, s.clock())
 	if err != nil {
 		return domain.Inspection{}, err
 	}

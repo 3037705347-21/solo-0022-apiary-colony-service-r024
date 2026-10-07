@@ -6,9 +6,11 @@ func (s *Server) register() {
 	s.mux.HandleFunc("POST /apiaries", s.handleRegisterApiary)
 	s.mux.HandleFunc("GET /apiaries/{apiaryId}", s.handleGetApiary)
 	s.mux.HandleFunc("GET /apiaries/{apiaryId}/status", s.handleApiaryStatus)
+	s.mux.HandleFunc("GET /apiaries/{apiaryId}/events", s.handleApiaryEvents)
 	s.mux.HandleFunc("POST /apiaries/{apiaryId}/hives", s.handleInstallHive)
 
 	s.mux.HandleFunc("GET /hives/{hiveId}", s.handleGetHive)
+	s.mux.HandleFunc("GET /hives/{hiveId}/events", s.handleHiveEvents)
 	s.mux.HandleFunc("POST /hives/{hiveId}/state", s.handleAdvanceHiveState)
 	s.mux.HandleFunc("POST /hives/{hiveId}/inspections", s.handleRecordInspection)
 	s.mux.HandleFunc("GET /hives/{hiveId}/inspections", s.handleListInspections)

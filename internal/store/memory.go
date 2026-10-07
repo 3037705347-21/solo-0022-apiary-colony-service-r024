@@ -9,7 +9,8 @@ import (
 )
 
 // Memory 是并发安全的内存仓储。所有写入都在写锁内完成状态校验，
-// 读取则通过 Snapshot 得到一致视图。
+// 读取则通过 Snapshot 得到一致视图。被采纳的写入在同一把锁内追加
+// 审计事件，保证事件与业务结果同源：写入失败或被拒绝时不留事件。
 type Memory struct {
 	mu sync.RWMutex
 
@@ -20,6 +21,9 @@ type Memory struct {
 
 	inspectionSeq int
 	queenSeq      int
+
+	events   []domain.Event
+	eventSeq int64
 }
 
 func NewMemory() *Memory {
@@ -28,6 +32,7 @@ func NewMemory() *Memory {
 		hives:       make(map[string]domain.Hive),
 		inspections: make(map[string][]domain.Inspection),
 		queens:      make(map[string][]domain.Queen),
+		events:      []domain.Event{},
 	}
 }
 
@@ -38,6 +43,7 @@ func (m *Memory) CreateApiary(apiary domain.Apiary) error {
 		return domain.Conflict("蜂场 %q 已存在", apiary.ID)
 	}
 	m.apiaries[apiary.ID] = apiary
+	m.appendEventLocked(domain.ApiaryRegisteredEvent(m.nextEventSeqLocked(), apiary.CreatedAt, apiary))
 	return nil
 }
 
@@ -58,6 +64,7 @@ func (m *Memory) CreateHive(hive domain.Hive) error {
 		return domain.Conflict("蜂箱 %q 已存在", hive.ID)
 	}
 	m.hives[hive.ID] = hive
+	m.appendEventLocked(domain.HiveInstalledEvent(m.nextEventSeqLocked(), hive.InstalledAt, hive))
 	return nil
 }
 
@@ -69,7 +76,8 @@ func (m *Memory) GetHive(id string) (domain.Hive, bool) {
 }
 
 // AdvanceHive 在同一把写锁内完成状态读取、迁移校验与写入，避免并发迁移产生交错结果。
-func (m *Memory) AdvanceHive(hiveID string, target domain.HiveState, _ time.Time) (domain.Transition, error) {
+// 迁移被采纳时在同一锁内追加事件；冲突或非法迁移不留下事件。
+func (m *Memory) AdvanceHive(hiveID string, target domain.HiveState, now time.Time) (domain.Transition, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	hive, ok := m.hives[hiveID]
@@ -86,12 +94,15 @@ func (m *Memory) AdvanceHive(hiveID string, target domain.HiveState, _ time.Time
 	from := hive.State
 	hive.State = target
 	m.hives[hiveID] = hive
-	return domain.Transition{HiveID: hiveID, From: from, To: target}, nil
+	transition := domain.Transition{HiveID: hiveID, From: from, To: target}
+	m.appendEventLocked(domain.HiveStateAdvancedEvent(m.nextEventSeqLocked(), now, hive.ApiaryID, transition))
+	return transition, nil
 }
 
 // AddInspection 分配巡检编号、写入记录，并推进蜂箱的最近巡检时间。
 // 蜂箱存在与可接受巡检的判定与写入处于同一把锁，避免退役与巡检之间的竞态。
-func (m *Memory) AddInspection(hiveID string, inspection domain.Inspection) (domain.Inspection, error) {
+// 巡检被保存时在同一锁内追加事件；状态不符或越界量测不留下事件。
+func (m *Memory) AddInspection(hiveID string, inspection domain.Inspection, recordedAt time.Time) (domain.Inspection, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	hive, ok := m.hives[hiveID]
@@ -109,11 +120,13 @@ func (m *Memory) AddInspection(hiveID string, inspection domain.Inspection) (dom
 	observedAt := inspection.ObservedAt
 	hive.LastInspectionAt = &observedAt
 	m.hives[hiveID] = hive
+	m.appendEventLocked(domain.InspectionRecordedEvent(m.nextEventSeqLocked(), recordedAt, hive.ApiaryID, inspection))
 	return inspection, nil
 }
 
 // AddQueen 关闭原有产卵蜂王并写入新蜂王，两件事在同一把锁内完成，
 // 保证任意时刻同一蜂箱至多只有一只 laying 蜂王。
+// 换王被采纳时在同一锁内追加事件；已退役蜂箱或关闭失败不留下事件。
 func (m *Memory) AddQueen(
 	hiveID string,
 	queen domain.Queen,
@@ -143,6 +156,7 @@ func (m *Memory) AddQueen(
 
 	hive.ActiveQueenID = queen.ID
 	m.hives[hiveID] = hive
+	m.appendEventLocked(domain.QueenReplacedEvent(m.nextEventSeqLocked(), now, hive.ApiaryID, queen, closeQueenID, closeState))
 	return queen, nil
 }
 
@@ -187,6 +201,64 @@ func (m *Memory) ListQueens(hiveID string) ([]domain.Queen, error) {
 	out := make([]domain.Queen, len(items))
 	copy(out, items)
 	return out, nil
+}
+
+// EventsByApiary 返回蜂场及其全部蜂箱的审计事件，按顺序号升序。
+// 事件只追加不改写，同一范围的重复读取得到稳定的顺序与内容。
+func (m *Memory) EventsByApiary(apiaryID string) ([]domain.Event, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if _, ok := m.apiaries[apiaryID]; !ok {
+		return nil, domain.NotFound("蜂场", apiaryID)
+	}
+	out := []domain.Event{}
+	for _, event := range m.events {
+		if event.ApiaryID == apiaryID {
+			out = append(out, cloneEvent(event))
+		}
+	}
+	return out, nil
+}
+
+// EventsByHive 返回单个蜂箱的审计事件，按顺序号升序。
+func (m *Memory) EventsByHive(hiveID string) ([]domain.Event, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if _, ok := m.hives[hiveID]; !ok {
+		return nil, domain.NotFound("蜂箱", hiveID)
+	}
+	out := []domain.Event{}
+	for _, event := range m.events {
+		if event.HiveID == hiveID {
+			out = append(out, cloneEvent(event))
+		}
+	}
+	return out, nil
+}
+
+// nextEventSeqLocked 分配单调递增的事件顺序号，调用方必须持有写锁。
+func (m *Memory) nextEventSeqLocked() int64 {
+	m.eventSeq++
+	return m.eventSeq
+}
+
+// appendEventLocked 把事件追加到日志末尾，调用方必须持有写锁。
+// 仓储不提供任何修改或删除事件的入口，已发生的事件不可改写。
+func (m *Memory) appendEventLocked(event domain.Event) {
+	m.events = append(m.events, event)
+}
+
+// cloneEvent 深拷贝事件，避免读取方改写到已经落账的事实。
+func cloneEvent(event domain.Event) domain.Event {
+	facts := make(map[string]any, len(event.Facts))
+	for key, value := range event.Facts {
+		if list, ok := value.([]string); ok {
+			value = append([]string{}, list...)
+		}
+		facts[key] = value
+	}
+	event.Facts = facts
+	return event
 }
 
 // Snapshot 返回深拷贝的一致视图，供汇总类读取使用。

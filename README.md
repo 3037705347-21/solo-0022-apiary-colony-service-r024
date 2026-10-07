@@ -8,11 +8,12 @@
 - `cmd/server`：HTTP 服务入口。
 - `cmd/check`：按 workflow 执行真实 HTTP 路径的生产校验入口。
 - `internal/domain`：实体、枚举、校验与蜂群状态迁移表。
-- `internal/store`：并发安全的内存仓储与一致性快照。
+- `internal/store`：并发安全的内存仓储、一致性快照与只增不改的审计事件日志。
 - `internal/apiary`：蜂场与蜂箱录入、蜂箱状态迁移。
 - `internal/inspection`：巡检接收与关注项判定。
 - `internal/queen`：蜂王更换与标记色推导。
 - `internal/status`：蜂场状态汇总聚合。
+- `internal/audit`：按蜂场或蜂箱读取审计事件。
 - `internal/httpapi`：路由、请求解析与响应映射。
 - `internal/app`：应用组装与配置。
 
@@ -54,6 +55,12 @@ go run ./cmd/check -workflow read-apiary-status
 - `GET /hives/{hiveId}/queens`：列出蜂王记录。
 - `GET /apiaries/{apiaryId}/status`：可选查询参数 `asOf`（RFC3339），返回状态计数、
   待巡检蜂箱、有未处理关注项的蜂箱与逐蜂箱摘要。
+- `GET /apiaries/{apiaryId}/events`：按顺序号升序返回该蜂场及其全部蜂箱的审计事件。
+- `GET /hives/{hiveId}/events`：按顺序号升序返回单个蜂箱的审计事件。
+
+审计事件在写操作被采纳时与业务结果同源落账，覆盖蜂场录入、蜂箱安装、状态迁移、
+巡检与换王；校验失败、编号冲突或状态冲突的请求不留下事件。事件只追加不改写，
+同一范围的重复读取得到稳定的顺序与内容。
 
 错误响应统一为：
 
@@ -89,6 +96,7 @@ go run ./cmd/check -workflow record-inspection
 go run ./cmd/check -workflow replace-queen
 go run ./cmd/check -workflow advance-hive-state
 go run ./cmd/check -workflow read-apiary-status
+go run ./cmd/check -workflow audit-events
 ```
 
 ## 测试边界
